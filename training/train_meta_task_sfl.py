@@ -45,7 +45,7 @@ class TrainConfig:
     rnn_num_layers: int = 1
     head_hidden_dim: int = 256
     # training
-    num_envs: int = 1024
+    num_envs: int = 8192
     num_steps_per_env: int = 4096
     num_steps_per_update: int = 32
     update_epochs: int = 1
@@ -66,11 +66,11 @@ class TrainConfig:
     checkpoint_path: Optional[str] = None
     #sfl
     sfl_num_episodes: int = 10
-    sfl_buffer_size: int = 2000
-    sfl_batch_size: int = 1000
+    sfl_buffer_size: int = 20000
+    sfl_batch_size: int = 10000
     sfl_num_batches: int = 10
     sfl_buffer_refresh_freq: int = 5
-    sfl_num_envs_to_sample: int = 512
+    sfl_num_envs_to_sample: int = 4096
     
 
     def __post_init__(self):
