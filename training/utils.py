@@ -102,6 +102,7 @@ def ppo_update_networks(
 # for evaluation (evaluate for N consecutive episodes, sum rewards)
 # N=1 single task, N>1 for meta-RL
 class RolloutStats(struct.PyTreeNode):
+    success: jax.Array = jnp.asarray(0)
     reward: jax.Array = jnp.asarray(0.0)
     length: jax.Array = jnp.asarray(0)
     episodes: jax.Array = jnp.asarray(0)
@@ -136,6 +137,7 @@ def rollout(
         timestep = env.step(env_params, timestep, action)
 
         stats = stats.replace(
+            success=stats.success + jnp.where(timestep.discount == 0.0, 1, 0),
             reward=stats.reward + timestep.reward,
             length=stats.length + 1,
             episodes=stats.episodes + timestep.last(),
