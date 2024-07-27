@@ -32,8 +32,9 @@ jax.config.update("jax_threefry_partitionable", True)
 @dataclass
 class TrainConfig:
     project: str = "xminigrid"
+    mode: str = "online"
     group: str = "default"
-    name: str = "meta-task-ppo"
+    name: str = "meta-task-ppo-dr"
     env_id: str = "XLand-MiniGrid-R1-9x9"
     benchmark_id: str = "trivial-1m"
     img_obs: bool = False
@@ -43,12 +44,12 @@ class TrainConfig:
     rnn_num_layers: int = 1
     head_hidden_dim: int = 256
     # training
-    num_envs: int = 8192
+    num_envs: int = 1024
     num_steps_per_env: int = 4096
     num_steps_per_update: int = 32
     update_epochs: int = 1
     num_minibatches: int = 16
-    total_timesteps: int = 100_000_000
+    total_timesteps: int = 1e10
     lr: float = 0.001
     clip_eps: float = 0.2
     gamma: float = 0.99
@@ -143,7 +144,7 @@ def make_train(
         init_hstate: jax.Array,
     ):
         # META TRAIN LOOP
-        def _meta_step(meta_state, _):
+        def _meta_step(meta_state, update_idx):
             rng, train_state = meta_state
 
             # INIT ENV
@@ -158,12 +159,13 @@ def make_train(
             timestep = jax.vmap(env.reset, in_axes=(0, 0))(meta_env_params, reset_rng)
             prev_action = jnp.zeros(config.num_envs_per_device, dtype=jnp.int32)
             prev_reward = jnp.zeros(config.num_envs_per_device)
-
+            outcomes = jnp.zeros((config.num_envs_per_device, 2))
+            
             # INNER TRAIN LOOP
             def _update_step(runner_state, _):
                 # COLLECT TRAJECTORIES
                 def _env_step(runner_state, _):
-                    rng, train_state, prev_timestep, prev_action, prev_reward, prev_hstate = runner_state
+                    rng, train_state, prev_timestep, prev_action, prev_reward, outcomes, prev_hstate = runner_state
 
                     # SELECT ACTION
                     rng, _rng = jax.random.split(rng)
@@ -183,6 +185,10 @@ def make_train(
 
                     # STEP ENV
                     timestep = jax.vmap(env.step, in_axes=0)(meta_env_params, prev_timestep, action)
+                    success = timestep.discount == 0.0
+                    outcomes = outcomes.at[:, 0].add(jnp.where(timestep.last(), 1, 0))  # count completed episodes
+                    outcomes = outcomes.at[:, 1].add(jnp.where(success, 1, 0))
+                    
                     transition = Transition(
                         # ATTENTION: done is always false, as we optimize for entire meta-rollout
                         done=jnp.zeros_like(timestep.last()),
@@ -194,7 +200,7 @@ def make_train(
                         prev_action=prev_action,
                         prev_reward=prev_reward,
                     )
-                    runner_state = (rng, train_state, timestep, action, timestep.reward, hstate)
+                    runner_state = (rng, train_state, timestep, action, timestep.reward, outcomes, hstate)
                     return runner_state, transition
 
                 initial_hstate = runner_state[-1]
@@ -202,7 +208,7 @@ def make_train(
                 runner_state, transitions = jax.lax.scan(_env_step, runner_state, None, config.num_steps_per_update)
 
                 # CALCULATE ADVANTAGE
-                rng, train_state, timestep, prev_action, prev_reward, hstate = runner_state
+                rng, train_state, timestep, prev_action, prev_reward, outcomes, hstate = runner_state
                 # calculate value of the last step for bootstrapping
                 _, last_val, _ = train_state.apply_fn(
                     train_state.params,
@@ -259,15 +265,16 @@ def make_train(
 
                 # averaging over minibatches then over epochs
                 loss_info = jtu.tree_map(lambda x: x.mean(-1).mean(-1), loss_info)
-                runner_state = (rng, train_state, timestep, prev_action, prev_reward, hstate)
+                runner_state = (rng, train_state, timestep, prev_action, prev_reward, outcomes, hstate)
                 return runner_state, loss_info
 
             # on each meta-update we reset rnn hidden to init_hstate
-            runner_state = (rng, train_state, timestep, prev_action, prev_reward, init_hstate)
+            runner_state = (rng, train_state, timestep, prev_action, prev_reward, outcomes, init_hstate)
             runner_state, loss_info = jax.lax.scan(_update_step, runner_state, None, config.num_inner_updates)
             # WARN: do not forget to get updated params
             rng, train_state = runner_state[:2]
-
+            outcomes = runner_state[-2]
+            success_rate = outcomes.at[:, 1].get() / outcomes.at[:, 0].get()
             # EVALUATE AGENT
             eval_ruleset_rng, eval_reset_rng = jax.random.split(jax.random.key(config.eval_seed))
             eval_ruleset_rng = jax.random.split(eval_ruleset_rng, num=config.eval_num_envs_per_device)
@@ -294,16 +301,22 @@ def make_train(
                     "eval/returns_mean": eval_stats.reward.mean(0),
                     "eval/returns_median": jnp.median(eval_stats.reward),
                     "eval/lengths": eval_stats.length.mean(0),
+                    "eval/success_rate_mean": jnp.mean(eval_stats.success/eval_stats.episodes),
                     "eval/lengths_20percentile": jnp.percentile(eval_stats.length, q=20),
                     "eval/returns_20percentile": jnp.percentile(eval_stats.reward, q=20),
                     "lr": train_state.opt_state[-1].hyperparams["learning_rate"],
+                    "outcomes": success_rate,
+                    "num_env_steps": update_idx * config.num_inner_updates * config.num_steps_per_update * config.num_envs,
                 }
             )
+
+            jax.experimental.io_callback(lambda x: wandb.log(x), None, loss_info)
+            
             meta_state = (rng, train_state)
             return meta_state, loss_info
 
         meta_state = (rng, train_state)
-        meta_state, loss_info = jax.lax.scan(_meta_step, meta_state, None, config.num_meta_updates)
+        meta_state, loss_info = jax.lax.scan(_meta_step, meta_state, jnp.arange(1, config.num_meta_updates+1), config.num_meta_updates)
         return {"state": meta_state[-1], "loss_info": loss_info}
 
     return train
@@ -318,6 +331,7 @@ def train(config: TrainConfig):
         name=config.name,
         config=asdict(config),
         save_code=True,
+        mode=config.mode,
     )
     # removing existing checkpoints if any
     if config.checkpoint_path is not None and os.path.exists(config.checkpoint_path):
@@ -345,12 +359,12 @@ def train(config: TrainConfig):
     print("Logginig...")
     loss_info = unreplicate(train_info["loss_info"])
 
-    total_transitions = 0
-    for i in range(config.num_meta_updates):
-        total_transitions += config.num_steps_per_env * config.num_envs_per_device * jax.local_device_count()
-        info = jtu.tree_map(lambda x: x[i].item(), loss_info)
-        info["transitions"] = total_transitions
-        wandb.log(info)
+    # total_transitions = 0
+    # for i in range(config.num_meta_updates):
+    #     total_transitions += config.num_steps_per_env * config.num_envs_per_device * jax.local_device_count()
+    #     info = jtu.tree_map(lambda x: x[i].item(), loss_info)
+    #     info["transitions"] = total_transitions
+    #     wandb.log(info)
 
     run.summary["training_time"] = elapsed_time
     run.summary["steps_per_second"] = (config.total_timesteps_per_device * jax.local_device_count()) / elapsed_time
