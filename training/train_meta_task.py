@@ -44,7 +44,7 @@ class TrainConfig:
     rnn_num_layers: int = 1
     head_hidden_dim: int = 256
     # training
-    num_envs: int = 1024
+    num_envs: int = 8192
     num_steps_per_env: int = 4096
     num_steps_per_update: int = 32
     update_epochs: int = 1
