@@ -40,6 +40,9 @@ dependencies = [
     "chex>=0.1.85",
     "imageio>=2.31.2",
     "imageio-ffmpeg>=0.4.9",
+    "wandb",
+    "pyrallis",
+    "tqdm",
 ]
 
 [project.optional-dependencies]
