@@ -66,6 +66,7 @@ class TrainConfig:
     def __post_init__(self):
         num_devices = jax.local_device_count()
         # splitting computation across all available devices
+        assert num_devices == 1, "Only single device training is supported."
         self.num_envs_per_device = self.num_envs // num_devices
         self.total_timesteps_per_device = self.total_timesteps // num_devices
         self.eval_num_envs_per_device = self.eval_num_envs // num_devices
