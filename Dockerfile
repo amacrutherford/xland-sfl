@@ -16,6 +16,7 @@ USER root
 RUN apt-get update && \
     apt-get install -y tmux
 
+RUN pip install git+https://github.com/DramaCow/jaxued.git
 #jaxmarl from source if needed, all the requirements
 RUN pip install -e .[dev,baselines]
 
