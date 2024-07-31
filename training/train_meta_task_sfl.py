@@ -34,10 +34,10 @@ jax.config.update("jax_threefry_partitionable", True)
 class TrainConfig:
     project: str = "xminigrid"
     mode: str = "online"
-    group: str = "default"
-    name: str = "meta-task-ppo-sfl-dev"
+    group: str = "medium-sfl"
+    name: str = "meta-task-medium-ppo-sfl-dev"
     env_id: str = "XLand-MiniGrid-R1-9x9"
-    benchmark_id: str = "trivial-1m"
+    benchmark_id: str = "medium-1m"
     img_obs: bool = False
     # agent
     action_emb_dim: int = 16
@@ -63,13 +63,13 @@ class TrainConfig:
     eval_num_episodes: int = 10
     eval_seed: int = 42
     train_seed: int = 42
-    checkpoint_path: Optional[str] = None
+    checkpoint_path: Optional[str] = "checkpoints/sfl"
     #sfl
     sfl_num_episodes: int = 10
-    sfl_buffer_size: int = 20000
-    sfl_batch_size: int = 10000
-    sfl_num_batches: int = 10
-    sfl_buffer_refresh_freq: int = 5
+    sfl_buffer_size: int = 4096
+    sfl_batch_size: int = 20000
+    sfl_num_batches: int = 1
+    sfl_buffer_refresh_freq: int = 1
     sfl_num_envs_to_sample: int = 4096
     
 
@@ -166,11 +166,11 @@ def make_train(
             def _batch_step(unused, batch_rng):
                 ruleset_rng, rollout_rng = jax.random.split(batch_rng)
                 # sample rulesets
-                ruleset_rng = jax.random.split(rng, num=50)
+                ruleset_rng = jax.random.split(ruleset_rng, num=config.sfl_batch_size)
                 rulesets = jax.vmap(benchmark.sample_ruleset)(ruleset_rng)
                 rollout_env_params = env_params.replace(ruleset=rulesets)
                 
-                rollout_rng = jax.random.split(batch_rng, num=50)
+                rollout_rng = jax.random.split(rollout_rng, num=config.sfl_batch_size)
                 rollout_stats = jax.vmap(rollout, in_axes=(0, None, 0, None, None, None))(
                     rollout_rng,
                     env,
@@ -191,18 +191,21 @@ def make_train(
             flat_rulesets = jax.tree_map(lambda x: x.reshape((-1,) + x.shape[2:]), rulesets)
             print('flat rulesets', flat_rulesets)
             
-            top_learnability = jnp.argsort(learnability)[-config.sfl_batch_size:]
+            top_learnability = jnp.argsort(learnability)[-config.sfl_buffer_size:]
             top_rulesets = jax.tree_map(lambda x: x.at[top_learnability].get(), flat_rulesets) 
             
-            return top_rulesets, learnability.at[top_learnability].get()
+            info = {
+                "buffer_learnability_scores": learnability.at[top_learnability].get(),
+                "buffer_success": sucess_rate.at[top_learnability].get(),
+                "all_sampled_success": sucess_rate,
+            }
+            
+            return top_rulesets, info
                            
         
         # META TRAIN LOOP
         def _meta_step(meta_state, update_idx):
             rng, train_state, sfl_buffer = meta_state
-
-            rng, _rng = jax.random.split(rng)
-            _sample_learnability_buffer(rng, train_state)
 
             # INIT ENV
             rng, _rng1, _rng2, _rng3 = jax.random.split(rng, num=4)
@@ -394,16 +397,19 @@ def make_train(
             rng, train_state, _ = meta_state
 
             rng, _rng = jax.random.split(rng)
-            sfl_buffer, buffer_learnability_scores = _sample_learnability_buffer(_rng, train_state)
-            jax.experimental.io_callback(lambda x: wandb.log({"buffer_learnability_scores": x}), None, buffer_learnability_scores)
+            sfl_buffer, learnability_info = _sample_learnability_buffer(_rng, train_state)
+            def __buffer_callback(x):
+                info, step = x
+                wandb.log(info, step=step)
             
-            inner_idx = jnp.arange(1, config.sfl_buffer_refresh_freq+1) + (outer_idx-1)*config.sfl_buffer_refresh_freq
+            inner_idx = jnp.arange(config.sfl_buffer_refresh_freq) + (outer_idx)*config.sfl_buffer_refresh_freq
+            jax.experimental.io_callback(__buffer_callback, None, (learnability_info, inner_idx.at[0].get()))
             meta_state, loss_info = jax.lax.scan(_meta_step, (rng, train_state, sfl_buffer), inner_idx, config.sfl_buffer_refresh_freq)
-            return meta_state, (loss_info, buffer_learnability_scores)
+            return meta_state, (loss_info, learnability_info)
         
-        meta_state, (loss_info, buffer_learnability_scores) = jax.lax.scan(_outer_step, meta_state, jnp.arange(1, config.num_outer_steps+1), config.num_outer_steps)
+        meta_state, (loss_info, learnability_info) = jax.lax.scan(_outer_step, meta_state, jnp.arange(config.num_outer_steps), config.num_outer_steps)
         loss_info = jax.tree_map(lambda x: x.flatten(), loss_info)
-        return {"state": meta_state[-2], "loss_info": loss_info, "buffer_learnability_scores": buffer_learnability_scores}
+        return {"state": meta_state[-2], "loss_info": loss_info, **learnability_info}
 
     return train
 

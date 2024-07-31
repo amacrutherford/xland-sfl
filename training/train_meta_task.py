@@ -33,10 +33,10 @@ jax.config.update("jax_threefry_partitionable", True)
 class TrainConfig:
     project: str = "xminigrid"
     mode: str = "online"
-    group: str = "default"
-    name: str = "meta-task-ppo-dr"
+    group: str = "medium-dr"
+    name: str = "meta-task-medium-ppo-dr"
     env_id: str = "XLand-MiniGrid-R1-9x9"
-    benchmark_id: str = "trivial-1m"
+    benchmark_id: str = "medium-1m"
     img_obs: bool = False
     # agent
     action_emb_dim: int = 16
@@ -61,7 +61,7 @@ class TrainConfig:
     eval_num_episodes: int = 10
     eval_seed: int = 42
     train_seed: int = 42
-    checkpoint_path: Optional[str] = None
+    checkpoint_path: Optional[str] = "checkpoints/dr"
 
     def __post_init__(self):
         num_devices = jax.local_device_count()
