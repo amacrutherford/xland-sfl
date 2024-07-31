@@ -1,0 +1,35 @@
+command:
+  - python3
+  - ${program}
+  - ${args_no_hyphens}
+entity: alex-plus
+method: grid
+metric:
+  goal: maximize
+  name: eval/returns_mean
+parameters:
+  ued_score_functionued_score_function:
+    values:
+      - "MaxMC"
+      - "pvl"
+  replay_prob:
+    values:
+      - 0.5
+      - 0.95
+  buffer_capacity: 
+    values:
+      - 20000
+      - 40000
+  prioritization_params.temperature: 
+    values: 
+      - 0.1
+      - 1.0
+  prioritization: 
+    values: 
+     - "rank"
+     - "topk"
+  mode:
+    values:
+      - online
+program: training/train_meta_task_ued.py
+project: xminigrid
