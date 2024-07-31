@@ -56,7 +56,8 @@ baselines = [
     "distrax>=0.1.4",
     "optax>=0.1.5",
     "orbax>=0.1.9",
-    "tqdm"
+    "tqdm",
+    "safetensors",
 ]
 
 

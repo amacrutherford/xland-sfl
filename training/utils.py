@@ -3,6 +3,10 @@ import jax
 import jax.numpy as jnp
 from flax import struct
 from flax.training.train_state import TrainState
+import os 
+import typing 
+from flax.traverse_util import flatten_dict, unflatten_dict
+from safetensors.flax import save_file, load_file
 from xminigrid.environment import Environment, EnvParams
 
 
@@ -152,3 +156,11 @@ def rollout(
 
     final_carry = jax.lax.while_loop(_cond_fn, _body_fn, init_val=init_carry)
     return final_carry[1]
+
+def save_params(params: typing.Dict, filename: typing.Union[str, os.PathLike]) -> None:
+    flattened_dict = flatten_dict(params, sep=',')
+    save_file(flattened_dict, filename)
+    
+def load_params(filename: typing.Union[str, os.PathLike]) -> typing.Dict:
+    flattened_dict = load_file(filename)
+    return unflatten_dict(flattened_dict, sep=',')

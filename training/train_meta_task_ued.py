@@ -24,7 +24,7 @@ from flax.jax_utils import replicate, unreplicate
 from flax.training import orbax_utils
 from flax.training.train_state import TrainState as BaseTrainState
 from nn import ActorCriticRNN
-from utils import calculate_gae, ppo_update_networks, rollout
+from utils import calculate_gae, ppo_update_networks, rollout, save_params
 from xminigrid.benchmarks import Benchmark
 from xminigrid.environment import Environment, EnvParams
 from xminigrid.wrappers import GymAutoResetWrapper
@@ -44,9 +44,9 @@ class PrioritizationParams:
 class TrainConfig:
     project: str = "xminigrid"
     mode: str = "online"
-    group: str = "medium-plr"
-    name: str = "meta-task-medium-ppo-plr-dev"
-    env_id: str = "XLand-MiniGrid-R1-9x9"
+    group: str = "medium-13-plr"
+    name: str = "meta-task-medium-13-plr"
+    env_id: str = "XLand-MiniGrid-R4-13x13"
     benchmark_id: str = "medium-1m"
     img_obs: bool = False
     # agent
@@ -60,7 +60,7 @@ class TrainConfig:
     num_steps_per_update: int = 32
     update_epochs: int = 1
     num_minibatches: int = 16
-    total_timesteps: int = 1e10
+    total_timesteps: int = 1e8
     lr: float = 0.001
     clip_eps: float = 0.2
     gamma: float = 0.99
@@ -73,7 +73,7 @@ class TrainConfig:
     eval_num_episodes: int = 10
     eval_seed: int = 42
     train_seed: int = 42
-    checkpoint_path: Optional[str] = "checkpoints/sfl"
+    checkpoint_path: Optional[str] = "checkpoints"
     #ued
     exploratory_grad_updates: bool = True
     ued_score_function: str = "MaxMC"
@@ -527,10 +527,21 @@ def train(config: TrainConfig):
     run.summary["steps_per_second"] = (config.total_timesteps_per_device * jax.local_device_count()) / elapsed_time
 
     if config.checkpoint_path is not None:
-        checkpoint = {"config": asdict(config), "params": unreplicate(train_info)["state"].params}
-        orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
-        save_args = orbax_utils.save_args_from_target(checkpoint)
-        orbax_checkpointer.save(config.checkpoint_path, checkpoint, save_args=save_args)
+        params = train_info["state"].params
+        save_dir = os.path.join(config.checkpoint_path, run.name)
+        
+        os.makedirs(save_dir, exist_ok=True)
+        save_params(params, f'{save_dir}/model.safetensors')
+        print(f'Parameters of saved in {save_dir}/model.safetensors')
+        
+        # upload this to wandb as an artifact   
+        artifact = wandb.Artifact(f'{run.name}-checkpoint', type='checkpoint')
+        artifact.add_file(f'{save_dir}/model.safetensors')
+        artifact.save()
+        # checkpoint = {"config": asdict(config), "params": unreplicate(train_info)["state"].params}
+        # orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
+        # save_args = orbax_utils.save_args_from_target(checkpoint)
+        # orbax_checkpointer.save(config.checkpoint_path, checkpoint, save_args=save_args)
 
     print("Final return: ", float(loss_info["eval/returns_mean"][-1]))
     run.finish()
