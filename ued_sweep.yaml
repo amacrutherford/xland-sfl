@@ -1,7 +1,7 @@
 command:
   - python3
   - ${program}
-  - ${args_no_hyphens}
+  - ${args}
 entity: alex-plus
 method: grid
 metric:
