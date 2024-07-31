@@ -8,7 +8,7 @@ metric:
   goal: maximize
   name: eval/returns_mean
 parameters:
-  ued_score_functionued_score_function:
+  ued_score_function:
     values:
       - "MaxMC"
       - "pvl"

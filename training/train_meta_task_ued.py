@@ -60,7 +60,7 @@ class TrainConfig:
     num_steps_per_update: int = 32
     update_epochs: int = 1
     num_minibatches: int = 16
-    total_timesteps: int = 1e8
+    total_timesteps: int = 1e10
     lr: float = 0.001
     clip_eps: float = 0.2
     gamma: float = 0.99
