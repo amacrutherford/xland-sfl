@@ -7,6 +7,7 @@ import os
 import typing 
 from flax.traverse_util import flatten_dict, unflatten_dict
 from safetensors.flax import save_file, load_file
+from functools import partial
 from xminigrid.environment import Environment, EnvParams
 
 
@@ -155,6 +156,51 @@ def rollout(
     init_carry = (rng, RolloutStats(), timestep, prev_action, prev_reward, init_hstate)
 
     final_carry = jax.lax.while_loop(_cond_fn, _body_fn, init_val=init_carry)
+    return final_carry[1]
+
+# @partial(jax.jit, static_argnames=("num_steps",))
+def rollout_nsteps(
+    rng: jax.Array,
+    env: Environment,
+    env_params: EnvParams,
+    train_state: TrainState,
+    init_hstate: jax.Array,
+    num_steps: int = 500,
+) -> RolloutStats:
+    """ Rollout for `num_steps` environment steps """
+
+    def _env_step(carry, unused):
+        rng, stats, timestep, prev_action, prev_reward, hstate = carry
+
+        rng, _rng = jax.random.split(rng)
+        dist, _, hstate = train_state.apply_fn(
+            train_state.params,
+            {
+                "observation": timestep.observation[None, None, ...],
+                "prev_action": prev_action[None, None, ...],
+                "prev_reward": prev_reward[None, None, ...],
+            },
+            hstate,
+        )
+        action = dist.sample(seed=_rng).squeeze()
+        timestep = env.step(env_params, timestep, action)
+
+        stats = stats.replace(
+            success=stats.success + jnp.where(timestep.discount == 0.0, 1, 0),
+            reward=stats.reward + timestep.reward,
+            length=stats.length + 1,
+            episodes=stats.episodes + timestep.last(),
+        )
+        carry = (rng, stats, timestep, action, timestep.reward, hstate)
+        return carry, None
+
+    timestep = env.reset(env_params, rng)
+    prev_action = jnp.asarray(0)
+    prev_reward = jnp.asarray(0)
+    init_carry = (rng, RolloutStats(), timestep, prev_action, prev_reward, init_hstate)
+
+    final_carry, _ = jax.lax.scan(_env_step, init_carry, None, length=num_steps)
+
     return final_carry[1]
 
 def save_params(params: typing.Dict, filename: typing.Union[str, os.PathLike]) -> None:

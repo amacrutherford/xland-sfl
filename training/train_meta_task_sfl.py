@@ -21,7 +21,7 @@ from flax.jax_utils import replicate, unreplicate
 from flax.training import orbax_utils
 from flax.training.train_state import TrainState
 from nn import ActorCriticRNN
-from utils import Transition, calculate_gae, ppo_update_networks, rollout, save_params
+from utils import Transition, calculate_gae, ppo_update_networks, rollout, save_params, rollout_nsteps
 from xminigrid.benchmarks import Benchmark
 from xminigrid.environment import Environment, EnvParams
 from xminigrid.wrappers import GymAutoResetWrapper
@@ -65,7 +65,8 @@ class TrainConfig:
     train_seed: int = 42
     checkpoint_path: Optional[str] = "checkpoints"
     #sfl
-    sfl_num_episodes: int = 10
+    # sfl_num_episodes: int = 10
+    sfl_rollout_factor: int = 5  # how many times more steps to rollout than the max_steps
     sfl_buffer_size: int = 4096
     sfl_batch_size: int = 20000
     sfl_num_batches: int = 1
@@ -171,13 +172,13 @@ def make_train(
                 rollout_env_params = env_params.replace(ruleset=rulesets)
                 
                 rollout_rng = jax.random.split(rollout_rng, num=config.sfl_batch_size)
-                rollout_stats = jax.vmap(rollout, in_axes=(0, None, 0, None, None, None))(
+                rollout_stats = jax.vmap(rollout_nsteps, in_axes=(0, None, 0, None, None, None))(
                     rollout_rng,
                     env,
                     rollout_env_params,
                     train_state,
                     jnp.zeros((1, config.rnn_num_layers, config.rnn_hidden_dim)),
-                    config.sfl_num_episodes,
+                    env_params.max_steps * config.sfl_rollout_factor,
                 )
                 return None, (rulesets, rollout_stats)
             
