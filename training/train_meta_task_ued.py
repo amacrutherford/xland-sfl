@@ -77,11 +77,11 @@ class TrainConfig:
     #ued
     exploratory_grad_updates: bool = True
     ued_score_function: str = "MaxMC"
-    replay_prob: float = 0.5
-    buffer_capacity: int = 20000
+    replay_prob: float = 0.95
+    buffer_capacity: int = 40000
     staleness_coeff: float = 0.3
     minimum_fill_ratio: float = 1.0
-    prioritization: str = "topk"
+    prioritization: str = "rank"
     prioritization_params: PrioritizationParams = field(default_factory=PrioritizationParams)
     duplicate_check: bool = False
     sfl_buffer_refresh_freq: int = 1
