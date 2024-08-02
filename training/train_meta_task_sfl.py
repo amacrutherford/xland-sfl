@@ -68,7 +68,7 @@ class TrainConfig:
     # sfl_num_episodes: int = 10
     sfl_rollout_factor: int = 10  # how many times more steps to rollout than the max_steps
     sfl_buffer_size: int = 8192
-    sfl_batch_size: int = 20000
+    sfl_batch_size: int = 40000
     sfl_num_batches: int = 1
     sfl_buffer_refresh_freq: int = 1
     sfl_num_envs_to_sample: int = 8192
