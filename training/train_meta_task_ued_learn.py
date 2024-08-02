@@ -44,8 +44,8 @@ class PrioritizationParams:
 class TrainConfig:
     project: str = "xminigrid"
     mode: str = "online"
-    group: str = "medium-13-plr"
-    name: str = "meta-task-medium-13-plr"
+    group: str = "medium-13-plr-learn"
+    name: str = "meta-task-medium-13-plr-learn"
     env_id: str = "XLand-MiniGrid-R4-13x13"
     benchmark_id: str = "medium-1m"
     img_obs: bool = False
