@@ -26,10 +26,11 @@ jax.config.update("jax_threefry_partitionable", True)
 
 @dataclass
 class TrainConfig:
-    project: str = "xminigrid"
-    group: str = "default"
+    project: str = "xminigrid-single"
+    group: str = "BlockedUnlockPickUp-DR"
+    mode: str = "online"
     name: str = "single-task-ppo"
-    env_id: str = "MiniGrid-Empty-6x6"
+    env_id: str = "MiniGrid-BlockedUnlockPickUp"
     benchmark_id: Optional[str] = None
     ruleset_id: Optional[int] = None
     img_obs: bool = False
@@ -43,7 +44,7 @@ class TrainConfig:
     num_steps: int = 16
     update_epochs: int = 1
     num_minibatches: int = 16
-    total_timesteps: int = 1_000_000
+    total_timesteps: int = 5e8
     lr: float = 0.001
     clip_eps: float = 0.2
     gamma: float = 0.99
@@ -256,9 +257,19 @@ def make_train(
                 {
                     "eval/returns": eval_stats.reward.mean(0),
                     "eval/lengths": eval_stats.length.mean(0),
+                    "eval/success_rate": jnp.mean(eval_stats.success/eval_stats.episodes),
                     "lr": train_state.opt_state[-1].hyperparams["learning_rate"],
                 }
             )
+            
+            def _callback(info):
+                wandb.log(
+                    info,
+                    # step=info["update_step"]
+                )
+            
+            jax.experimental.io_callback(_callback, None, loss_info)
+            
             runner_state = (rng, train_state, timestep, prev_action, prev_reward, hstate)
             return runner_state, loss_info
 
@@ -278,6 +289,7 @@ def train(config: TrainConfig):
         name=config.name,
         config=asdict(config),
         save_code=True,
+        mode=config.mode,
     )
 
     rng, env, env_params, init_hstate, train_state = make_states(config)

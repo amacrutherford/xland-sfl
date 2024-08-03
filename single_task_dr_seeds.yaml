@@ -1,0 +1,22 @@
+command:
+  - python3
+  - ${program}
+  - ${args}
+entity: alex-plus
+method: grid
+metric:
+  goal: maximize
+  name: eval/success_rate
+parameters:
+  train_seed:
+    values:
+      - 42
+      - 43
+      - 44
+      - 45
+      - 46
+  mode:
+    values:
+      - online
+program: training/train_single_task.py
+project: xminigrid-single
