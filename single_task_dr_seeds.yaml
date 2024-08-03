@@ -8,7 +8,7 @@ metric:
   goal: maximize
   name: eval/success_rate
 parameters:
-  train_seed:
+  seed:
     values:
       - 42
       - 43
