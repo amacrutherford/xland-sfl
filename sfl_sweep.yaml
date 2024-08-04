@@ -16,20 +16,24 @@ parameters:
       - high-3m
   name: 
     values:
-      - meta-task-high-13-sfl
+      - meta-task-high-13-sfl-v2
   group:
     values:
-      - high-13-sfl-v1
+      - high-13-sfl-v2
   sfl_batch_size:
     values:
-      - 20000
       - 30000
-      - 40000
+      # - 40000
   sfl_buffer_refresh_freq:
     values:
-      - 1
-      - 2
       - 3
+  train_seed:
+    values: 
+      - 42
+      - 43
+      - 44
+      - 45
+      - 46
 
 program: training/train_meta_task_sfl.py
 project: xminigrid
