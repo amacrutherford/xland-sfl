@@ -23,7 +23,7 @@ parameters:
   sfl_batch_size:
     values:
       - 30000
-      # - 40000
+      - 40000
   sfl_buffer_refresh_freq:
     values:
       - 3
@@ -32,8 +32,8 @@ parameters:
       - 42
       - 43
       - 44
-      - 45
-      - 46
+      # - 45
+      # - 46
 
 program: training/train_meta_task_sfl.py
 project: xminigrid
