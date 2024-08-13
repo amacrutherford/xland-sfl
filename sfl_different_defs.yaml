@@ -16,8 +16,8 @@ parameters:
       - 42
       - 43
       - 44
-      # - 45
-      # - 46
+      - 45
+      - 46
   benchmark_id:
     values:
       - high-3m
