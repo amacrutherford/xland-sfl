@@ -1,0 +1,36 @@
+command:
+  - python3
+  - ${program}
+  - ${args}
+entity: alex-plus
+method: grid
+metric:
+  goal: maximize
+  name: eval/returns_mean
+parameters:
+  mode:
+    values:
+      - online
+  train_seed:
+    values: 
+      - 42
+      - 43
+      - 44
+      # - 45
+      # - 46
+  benchmark_id:
+    values:
+      - high-3m
+  learnability_func:
+    values:
+      - uniform
+  name:
+    values:
+      - meta-task-high-13-sfl-uniform
+  group:
+    values:
+      - high-13-sfl-uniform-v1
+program: training/train_meta_task_sfl_different_defs.py
+project: xminigrid
+
+
