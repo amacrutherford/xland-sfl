@@ -23,13 +23,14 @@ parameters:
       - high-3m
   learnability_func:
     values:
-      - uniform
-  name:
+      - linear
+  learnability_peak:
     values:
-      - meta-task-high-13-sfl-uniform
+      - 0.0
+      - 1.0
   group:
     values:
-      - high-13-sfl-uniform-v1
+      - high-13-sfl-linear-v1
 program: training/train_meta_task_sfl_different_defs.py
 project: xminigrid
 

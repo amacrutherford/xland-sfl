@@ -444,10 +444,13 @@ def make_train(
 @pyrallis.wrap()
 def train(config: TrainConfig):
     # logging to wandb
+    
+    run_name = f"meta-task-high-13-sfl-linear-{config.learnability_peak}"
+
     run = wandb.init(
         project=config.project,
         group=config.group,
-        name=config.name,
+        name=run_name,
         config=asdict(config),
         save_code=True,
         mode=config.mode,
