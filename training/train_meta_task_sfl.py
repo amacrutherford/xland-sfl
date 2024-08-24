@@ -12,6 +12,7 @@ import jax
 import jax.experimental
 import jax.numpy as jnp
 import jax.tree_util as jtu
+import numpy as np
 import optax
 import orbax
 import pyrallis
@@ -33,11 +34,11 @@ jax.config.update("jax_threefry_partitionable", True)
 @dataclass
 class TrainConfig:
     project: str = "xminigrid"
-    mode: str = "online"
+    mode: str = "disabled"
     group: str = "medium-13-sfl"
     name: str = "meta-task-medium-13-sfl-dev"
     env_id: str = "XLand-MiniGrid-R4-13x13"
-    benchmark_id: str = "medium-1m"
+    benchmark_id: str = "high-3m"
     img_obs: bool = False
     # agent
     action_emb_dim: int = 16
@@ -50,7 +51,7 @@ class TrainConfig:
     num_steps_per_update: int = 32
     update_epochs: int = 1
     num_minibatches: int = 16
-    total_timesteps: int = 1e10
+    total_timesteps: int = 5_700_000_000
     lr: float = 0.001
     clip_eps: float = 0.2
     gamma: float = 0.99
@@ -72,6 +73,9 @@ class TrainConfig:
     sfl_num_batches: int = 1
     sfl_buffer_refresh_freq: int = 1
     sfl_num_envs_to_sample: int = 8192
+    #logging
+    log_num_images: int = 20  # number of images to log
+    log_images_count: int = 4 # number of times to log images during training
     
 
     def __post_init__(self):
@@ -90,6 +94,8 @@ class TrainConfig:
         print('num meta updates', self.num_meta_updates)
         self.num_outer_steps = self.num_meta_updates // self.sfl_buffer_refresh_freq
         self.num_meta_updates = self.num_outer_steps * self.sfl_buffer_refresh_freq
+        self.log_images_update = self.num_meta_updates // self.log_images_count
+        print('logging images every', self.log_images_update)
         print('num outer steps', self.num_outer_steps)
         self.num_inner_updates = self.num_steps_per_env // self.num_steps_per_update
         print('num inner updates', self.num_inner_updates)
@@ -156,6 +162,19 @@ def make_train(
     benchmark: Benchmark,
     config: TrainConfig,
 ):
+    
+    def log_levels(init_timestep, rulesets, env_params, step):
+        
+        log_dict = {}
+        for i in range(rulesets.rules.shape[0]):
+            r = jax.tree.map(lambda x: x.at[i].get(), rulesets)
+            env_params = env_params.replace(ruleset=r)
+            t = jax.tree.map(lambda x: x.at[i].get(), init_timestep)
+            img = env.render(env_params, t)
+            log_dict.update({f"images/{i}_level": wandb.Image(np.array(img))})
+        print('step', step)
+        wandb.log(log_dict, step=step)
+    
     @partial(jax.pmap, axis_name="devices")
     def train(
         rng: jax.Array,
@@ -199,6 +218,7 @@ def make_train(
                 "buffer_learnability_scores": learnability.at[top_learnability].get(),
                 "buffer_success": sucess_rate.at[top_learnability].get(),
                 "all_sampled_success": sucess_rate,
+                "mean_num_rules": jnp.mean(jnp.sum(jnp.where(top_rulesets.rules.at[:,0].get() > 0, 1, 0), axis=1))
             }
             
             return top_rulesets, info
@@ -360,7 +380,16 @@ def make_train(
                 jnp.zeros((1, config.rnn_num_layers, config.rnn_hidden_dim)),
                 config.eval_num_episodes,
             )
-            eval_stats = jax.lax.pmean(eval_stats, axis_name="devices")
+
+            rulesets_to_log = jax.tree.map(lambda x: x.at[:config.log_num_images].get(), rulesets)
+            timesteps_to_log = jax.tree.map(lambda x: x.at[:config.log_num_images].get(), timestep)
+            # jax.experimental.io_callback(log_levels, None, timesteps_to_log, rulesets_to_log, env_params, update_idx)
+            
+            jax.lax.cond(
+                update_idx % config.log_images_update == 0,
+                lambda *_: jax.experimental.io_callback(log_levels, None, timesteps_to_log, rulesets_to_log, env_params, update_idx),
+                lambda *_: None,
+            )
 
             # averaging over inner updates, adding evaluation metrics
             loss_info = jtu.tree_map(lambda x: x.mean(-1), loss_info)

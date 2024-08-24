@@ -12,6 +12,7 @@ import jax
 import jax.experimental
 import jax.numpy as jnp
 import jax.tree_util as jtu
+import numpy as np 
 import optax
 import orbax
 import pyrallis
@@ -85,6 +86,9 @@ class TrainConfig:
     prioritization_params: PrioritizationParams = field(default_factory=PrioritizationParams)
     duplicate_check: bool = False
     sfl_buffer_refresh_freq: int = 1
+    #logging
+    log_num_images: int = 20  # number of images to log
+    log_images_count: int = 4 # number of times to log images during training
 
     def __post_init__(self):
         num_devices = jax.local_device_count()
@@ -97,6 +101,8 @@ class TrainConfig:
         self.num_meta_updates = round(
             self.total_timesteps_per_device / (self.num_envs_per_device * self.num_steps_per_env)
         )
+        self.log_images_update = self.num_meta_updates // self.log_images_count
+        print('logging images every', self.log_images_update)
         self.num_inner_updates = self.num_steps_per_env // self.num_steps_per_update
         assert self.num_steps_per_env % self.num_steps_per_update == 0
         print(f"Num devices: {num_devices}, Num meta updates: {self.num_meta_updates}")
@@ -240,6 +246,27 @@ def make_train(
     level_sampler: LevelSampler,
     config: TrainConfig,
 ):
+    
+    def log_levels(sampler, env_params, step):
+        
+        sorted_scores = jnp.argsort(sampler["scores"]).at[-config.log_num_images:].get()
+        rulesets = jax.tree.map(lambda x: x.at[sorted_scores].get(), sampler["levels"])
+        # rulesets_to_log = jax.tree.map(lambda x: x.at[:config.log_num_images].get(), )
+        l_env_params = env_params.replace(ruleset=rulesets)
+        prng = jax.random.PRNGKey(step)
+        init_timestep = jax.vmap(env.reset, in_axes=(0, 0))(l_env_params, jax.random.split(prng, num=config.log_num_images))
+            
+
+        log_dict = {}
+        for i in range(rulesets.rules.shape[0]):
+            r = jax.tree.map(lambda x: x.at[i].get(), rulesets)
+            env_params = env_params.replace(ruleset=r)
+            t = jax.tree.map(lambda x: x.at[i].get(), init_timestep)
+            img = env.render(env_params, t)
+            log_dict.update({f"images/{i}_level": wandb.Image(np.array(img))})
+        print('step', step)
+        wandb.log(log_dict, step=step)
+        
     @partial(jax.pmap, axis_name="devices")
     def train(
         rng: jax.Array,
@@ -450,6 +477,15 @@ def make_train(
             )
             eval_stats = jax.lax.pmean(eval_stats, axis_name="devices")
 
+            ruleset_mean_num_rules = jnp.mean(jnp.sum(jnp.where(sampler["levels"].rules.at[:,0].get() > 0, 1, 0), axis=1))
+
+            jax.lax.cond(
+                update_idx % config.log_images_update == 0,
+                lambda *_: jax.experimental.io_callback(log_levels, None, sampler, env_params, update_idx),
+                lambda *_: None,
+            )
+
+
             # averaging over inner updates, adding evaluation metrics
             loss_info = jtu.tree_map(lambda x: x.mean(-1), loss_info)
             loss_info.update(
@@ -460,6 +496,7 @@ def make_train(
                     "eval/success_rate_mean": jnp.mean(eval_stats.success/eval_stats.episodes),
                     "eval/lengths_20percentile": jnp.percentile(eval_stats.length, q=20),
                     "eval/returns_20percentile": jnp.percentile(eval_stats.reward, q=20),
+                    "ruleset_mean_num_rules": ruleset_mean_num_rules,
                     "lr": train_state.opt_state[-1].hyperparams["learning_rate"],
                     "outcomes": success_rate,
                     "num_env_steps": update_idx * config.num_inner_updates * config.num_steps_per_update * config.num_envs,

@@ -8,6 +8,8 @@ from dataclasses import asdict, dataclass
 from functools import partial
 from typing import Optional
 
+import jax.experimental
+import numpy as np 
 import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
@@ -62,6 +64,9 @@ class TrainConfig:
     eval_seed: int = 42
     train_seed: int = 42
     checkpoint_path: Optional[str] = "checkpoints"
+    #logging
+    log_num_images: int = 20  # number of images to log
+    log_images_count: int = 4 # number of times to log images during training
 
     def __post_init__(self):
         num_devices = jax.local_device_count()
@@ -74,6 +79,8 @@ class TrainConfig:
         self.num_meta_updates = round(
             self.total_timesteps_per_device / (self.num_envs_per_device * self.num_steps_per_env)
         )
+        self.log_images_update = self.num_meta_updates // self.log_images_count
+        print('logging images every', self.log_images_update)
         self.num_inner_updates = self.num_steps_per_env // self.num_steps_per_update
         assert self.num_steps_per_env % self.num_steps_per_update == 0
         print(f"Num devices: {num_devices}, Num meta updates: {self.num_meta_updates}")
@@ -138,12 +145,26 @@ def make_train(
     benchmark: Benchmark,
     config: TrainConfig,
 ):
+    
+    def log_levels(init_timestep, rulesets, env_params, step):
+        
+        log_dict = {}
+        for i in range(rulesets.rules.shape[0]):
+            r = jax.tree.map(lambda x: x.at[i].get(), rulesets)
+            env_params = env_params.replace(ruleset=r)
+            t = jax.tree.map(lambda x: x.at[i].get(), init_timestep)
+            img = env.render(env_params, t)
+            log_dict.update({f"images/{i}_level": wandb.Image(np.array(img))})
+        print('step', step)
+        wandb.log(log_dict, step=step)
+        
     @partial(jax.pmap, axis_name="devices")
     def train(
         rng: jax.Array,
         train_state: TrainState,
         init_hstate: jax.Array,
     ):
+        
         # META TRAIN LOOP
         def _meta_step(meta_state, update_idx):
             rng, train_state = meta_state
@@ -155,6 +176,7 @@ def make_train(
 
             # sample rulesets for this meta update
             rulesets = jax.vmap(benchmark.sample_ruleset)(ruleset_rng)
+            ruleset_mean_num_rules = jnp.mean(jnp.sum(jnp.where(rulesets.rules.at[:,0].get() > 0, 1, 0), axis=1))
             meta_env_params = env_params.replace(ruleset=rulesets)
 
             timestep = jax.vmap(env.reset, in_axes=(0, 0))(meta_env_params, reset_rng)
@@ -296,6 +318,16 @@ def make_train(
             eval_stats = jax.lax.pmean(eval_stats, axis_name="devices")
 
             # averaging over inner updates, adding evaluation metrics
+            rulesets_to_log = jax.tree.map(lambda x: x.at[:config.log_num_images].get(), rulesets)
+            timesteps_to_log = jax.tree.map(lambda x: x.at[:config.log_num_images].get(), timestep)
+            # jax.experimental.io_callback(log_levels, None, timesteps_to_log, rulesets_to_log, env_params, update_idx)
+            
+            jax.lax.cond(
+                update_idx % config.log_images_update == 0,
+                lambda *_: jax.experimental.io_callback(log_levels, None, timesteps_to_log, rulesets_to_log, env_params, update_idx),
+                lambda *_: None,
+            )
+            
             loss_info = jtu.tree_map(lambda x: x.mean(-1), loss_info)
             loss_info.update(
                 {
@@ -309,10 +341,11 @@ def make_train(
                     "outcomes": success_rate,
                     "num_env_steps": update_idx * config.num_inner_updates * config.num_steps_per_update * config.num_envs,
                     "update_step": update_idx,
+                    "ruleset_mean_num_rules": ruleset_mean_num_rules,
                 }
             )
 
-            jax.experimental.io_callback(lambda x: wandb.log(x), None, loss_info)
+            jax.experimental.io_callback(lambda x: wandb.log(x, step=x["update_step"]), None, loss_info)
             
             meta_state = (rng, train_state)
             return meta_state, loss_info
