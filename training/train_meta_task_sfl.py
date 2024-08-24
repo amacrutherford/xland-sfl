@@ -36,7 +36,6 @@ class TrainConfig:
     project: str = "xminigrid"
     mode: str = "disabled"
     group: str = "medium-13-sfl"
-    name: str = "meta-task-medium-13-sfl-dev"
     env_id: str = "XLand-MiniGrid-R4-13x13"
     benchmark_id: str = "high-3m"
     img_obs: bool = False
@@ -449,7 +448,6 @@ def train(config: TrainConfig):
     run = wandb.init(
         project=config.project,
         group=config.group,
-        name=config.name,
         config=asdict(config),
         save_code=True,
         mode=config.mode,
