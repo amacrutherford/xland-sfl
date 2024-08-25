@@ -44,7 +44,7 @@ XLand-MiniGrid should be cited as:
 }
 ```
 
-NO Regrets should be cited as:
+SFL should be cited as:
 ```bibtex
 TODO
 ```
