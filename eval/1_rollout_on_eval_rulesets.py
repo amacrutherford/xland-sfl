@@ -18,7 +18,7 @@ env_id = "XLand-MiniGrid-R4-13x13"
 benchmark_id = "high-3m"
 NUM_RULESETS = 10000
 eval_num_episodes = 10
-SEED = 1
+SEED = 0
 group = "high-13-sfl-uniform-v1"
 
 

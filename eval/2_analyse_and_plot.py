@@ -11,18 +11,27 @@ groups = [
     "high-13-sfl-40K",
     "high-13-plr-v1",
     "high-13-dr-v1",
+    "meta-task-high-13-sfl-linear-0.0",
+    "meta-task-high-13-sfl-linear-1.0",
+    "high-13-sfl-uniform-v1",
 ]
 
 groups_to_labels = {
     "high-13-dr-v1": "DR",
     "high-13-plr-v1": "PLR",
     "high-13-sfl-40K": "SFL (ours)",
+    "meta-task-high-13-sfl-linear-0.0": "Linear(0)",
+    "meta-task-high-13-sfl-linear-1.0": "Linear(1)",
+    "high-13-sfl-uniform-v1": "Uniform",
 }
 
 GROUP_TO_COLOUR = {
     "high-13-sfl-40K": '#0173b2', 
     "high-13-dr-v1": '#de8f05', 
     "high-13-plr-v1": '#d55e00', 
+    "meta-task-high-13-sfl-linear-0.0": "#cc78bc",
+    "meta-task-high-13-sfl-linear-1.0": "#ece133",
+    "high-13-sfl-uniform-v1": "#029e73",
     "PLR-PVL": '#029e73', 
     "ACCEL-MaxMC": '#cc78bc', 
     "PLR-L1VL": '#ece133', 
@@ -104,9 +113,7 @@ for group_name, cvar in cvar_results_per_group.items():
     )
 _annotate_and_decorate_axis(plt.gca(), xlabel=r'$\alpha$', ylabel=r'Avg Win Rate % on worst-case $\alpha$% levels', labelsize='x-large', ticklabelsize='x-large', wrect=10, hrect=10, legend=True)
 plt.xscale('log')
-# if 'jaxnav-single' in env:
-#     plt.xticks([1, 10, 100], ['1%', '10%', '100%'])
-# else:
 plt.xticks([1, 10, 100], ['1%', '10%', '100%'])
 plt.tight_layout()
-plt.savefig(f'cvar_line_{cvar_metric}.pdf', dpi=200, bbox_inches='tight', pad_inches=0.0)
+plt.savefig(f'results/xland_cvar_line_{cvar_metric}_all.pdf', dpi=200, bbox_inches='tight', pad_inches=0.0)
+plt.savefig(f'../multi-robot-neurips/images/xland_cvar_line_{cvar_metric}_all.pdf', dpi=200, bbox_inches='tight', pad_inches=0.0)
