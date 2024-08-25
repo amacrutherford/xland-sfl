@@ -34,7 +34,7 @@ jax.config.update("jax_threefry_partitionable", True)
 @dataclass
 class TrainConfig:
     project: str = "xminigrid"
-    mode: str = "disabled"
+    mode: str = "online"
     group: str = "medium-13-sfl"
     env_id: str = "XLand-MiniGrid-R4-13x13"
     benchmark_id: str = "high-3m"
@@ -74,14 +74,14 @@ class TrainConfig:
     sfl_num_envs_to_sample: int = 8192
     #logging
     log_num_images: int = 20  # number of images to log
-    log_images_count: int = 4 # number of times to log images during training
+    log_images_count: int = 16 # number of times to log images during training
     
 
     def __post_init__(self):
         num_devices = jax.local_device_count()
         # splitting computation across all available devices
         assert num_devices == 1, "Only single device training is supported."
-        assert self.sfl_num_envs_to_sample <= self.num_envs, "SFL sample envs should be less than total envs"
+        assert self.sfl_num_envs_to_sample <= self.num_envs, "SFL sample envs should be less than or equal to total envs"
         self.sfl_num_envs_to_generate = self.num_envs - self.sfl_num_envs_to_sample
         self.num_envs_per_device = self.num_envs // num_devices
         self.total_timesteps_per_device = self.total_timesteps // num_devices
@@ -166,9 +166,9 @@ def make_train(
         
         log_dict = {}
         for i in range(rulesets.rules.shape[0]):
-            r = jax.tree.map(lambda x: x.at[i].get(), rulesets)
+            r = jax.tree.map(lambda x: x[i], rulesets)
             env_params = env_params.replace(ruleset=r)
-            t = jax.tree.map(lambda x: x.at[i].get(), init_timestep)
+            t = jax.tree.map(lambda x: x[i], init_timestep)
             img = env.render(env_params, t)
             log_dict.update({f"images/{i}_level": wandb.Image(np.array(img))})
         print('step', step)

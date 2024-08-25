@@ -87,7 +87,7 @@ class TrainConfig:
     sfl_buffer_refresh_freq: int = 1
     #logging
     log_num_images: int = 20  # number of images to log
-    log_images_count: int = 4 # number of times to log images during training
+    log_images_count: int = 16 # number of times to log images during training
 
     def __post_init__(self):
         num_devices = jax.local_device_count()
@@ -248,9 +248,9 @@ def make_train(
     
     def log_levels(sampler, env_params, step):
         
-        sorted_scores = jnp.argsort(sampler["scores"]).at[-config.log_num_images:].get()
-        rulesets = jax.tree.map(lambda x: x.at[sorted_scores].get(), sampler["levels"])
-        # rulesets_to_log = jax.tree.map(lambda x: x.at[:config.log_num_images].get(), )
+        sorted_scores = jnp.argsort(sampler["scores"])[-config.log_num_images:]
+        rulesets = jax.tree.map(lambda x: x[sorted_scores], sampler["levels"])
+        # rulesets_to_log = jax.tree.map(lambda x: x[:config.log_num_images], )
         l_env_params = env_params.replace(ruleset=rulesets)
         prng = jax.random.PRNGKey(step)
         init_timestep = jax.vmap(env.reset, in_axes=(0, 0))(l_env_params, jax.random.split(prng, num=config.log_num_images))
@@ -258,9 +258,9 @@ def make_train(
 
         log_dict = {}
         for i in range(rulesets.rules.shape[0]):
-            r = jax.tree.map(lambda x: x.at[i].get(), rulesets)
+            r = jax.tree.map(lambda x: x[i], rulesets)
             env_params = env_params.replace(ruleset=r)
-            t = jax.tree.map(lambda x: x.at[i].get(), init_timestep)
+            t = jax.tree.map(lambda x: x[i], init_timestep)
             img = env.render(env_params, t)
             log_dict.update({f"images/{i}_level": wandb.Image(np.array(img))})
         print('step', step)

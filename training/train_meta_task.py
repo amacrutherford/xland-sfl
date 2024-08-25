@@ -65,7 +65,7 @@ class TrainConfig:
     checkpoint_path: Optional[str] = "checkpoints"
     #logging
     log_num_images: int = 20  # number of images to log
-    log_images_count: int = 4 # number of times to log images during training
+    log_images_count: int = 16 # number of times to log images during training
 
     def __post_init__(self):
         num_devices = jax.local_device_count()
@@ -149,9 +149,9 @@ def make_train(
         
         log_dict = {}
         for i in range(rulesets.rules.shape[0]):
-            r = jax.tree.map(lambda x: x.at[i].get(), rulesets)
+            r = jax.tree.map(lambda x: x[i], rulesets)
             env_params = env_params.replace(ruleset=r)
-            t = jax.tree.map(lambda x: x.at[i].get(), init_timestep)
+            t = jax.tree.map(lambda x: x[i], init_timestep)
             img = env.render(env_params, t)
             log_dict.update({f"images/{i}_level": wandb.Image(np.array(img))})
         print('step', step)
