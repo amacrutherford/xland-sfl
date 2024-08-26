@@ -2,7 +2,7 @@
 Start either a new wandb sweep or start agents for an existing sweep within a tmux session.
 
 Command line arguments:
-    1. sweep_agent: file_name (no .yaml) or entity/project/sweep_id 
+    1. sweep_agent: file_name.yaml or entity/project/sweep_id 
     2. gpus_to_use: all, 0:4, 0,1,2,3 (default: all)
     3. agents_per_gpu: number of agents to start per gpu (default: 2)
 
@@ -22,7 +22,7 @@ try:
     sweep_agent = sys.argv[1]
     if len(sweep_agent.split('/')) != 3:
         # create a new sweep
-        config_file = sweep_agent + ".yaml"
+        config_file = sweep_agent
         # check if config file exists
         assert os.path.exists(config_file), "Config file does not exist"
         sweep_config = yaml.load(open(config_file, "r"), Loader=yaml.FullLoader)
