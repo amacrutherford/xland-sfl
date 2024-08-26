@@ -9,8 +9,16 @@ api = wandb.Api()
 entity = "alex-plus"
 project = "xminigrid"
 
+# metric_name = {
+#     "high-13-sfl-metrics": "mean_num_rules",
+#     "high-13-ued-metrics": "ruleset_mean_num_rules",
+#     "high-13-dr-metrics": "ruleset_mean_num_rules",
+# }
+
 def download_metric_for_group(group, metric="eval/returns_mean"):
 
+    # metric = metric_name[group]
+    print('group', group, 'metric', metric)
     runs = api.runs(f"{entity}/{project}", filters={"group": group})
     
     df = pd.DataFrame(columns=["_step"])
@@ -35,16 +43,24 @@ groups = [
     "high-13-dr-v1",
 ]
 
+
+
 groups_to_labels = {
     "high-13-dr-v1": "DR",
     "high-13-plr-v1": "PLR",
-    "high-13-sfl-40k": "SFL (ours)",
+    "high-13-sfl-40k": "SFL",
+    # "high-13-dr-metrics": "DR",
+    # "high-13-ued-metrics": "PLR",
+    # "high-13-sfl-metrics": "SFL",
 }
 
 GROUP_TO_COLOUR = {
     "high-13-sfl-40k": '#0173b2', 
     "high-13-dr-v1": '#de8f05', 
     "high-13-plr-v1": '#d55e00', 
+    "high-13-dr-metrics": "#de8f05",
+    "high-13-ued-metrics": "#d55e00",
+    "high-13-sfl-metrics": "#0173b2",
     "PLR-PVL": '#029e73', 
     "ACCEL-MaxMC": '#cc78bc', 
     "PLR-L1VL": '#ece133', 
@@ -78,4 +94,4 @@ for group in groups:
 _annotate_and_decorate_axis(plt.gca(), xlabel='Meta-RL Update Step', ylabel='Mean Return on Evaluation Set', labelsize='x-large', ticklabelsize='x-large', wrect=10, hrect=10, legend=True)
 
 plt.tight_layout()
-plt.savefig('xland_return2.pdf', dpi=200, bbox_inches='tight', pad_inches=0.0)
+plt.savefig('xland_return3.pdf', dpi=200, bbox_inches='tight', pad_inches=0.0)

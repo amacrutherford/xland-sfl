@@ -9,8 +9,8 @@ from plot_utils import _annotate_and_decorate_axis, plot_mean_std_xy
 
 groups = [
     "high-13-sfl-40K",
-    "high-13-plr-v1",
-    "high-13-dr-v1",
+    # "high-13-plr-v1",
+    # "high-13-dr-v1",
     "meta-task-high-13-sfl-linear-0.0",
     "meta-task-high-13-sfl-linear-1.0",
     "high-13-sfl-uniform-v1",
@@ -19,7 +19,7 @@ groups = [
 groups_to_labels = {
     "high-13-dr-v1": "DR",
     "high-13-plr-v1": "PLR",
-    "high-13-sfl-40K": "SFL (ours)",
+    "high-13-sfl-40K": "SFL",
     "meta-task-high-13-sfl-linear-0.0": "Linear(0)",
     "meta-task-high-13-sfl-linear-1.0": "Linear(1)",
     "high-13-sfl-uniform-v1": "Uniform",
@@ -30,7 +30,7 @@ GROUP_TO_COLOUR = {
     "high-13-dr-v1": '#de8f05', 
     "high-13-plr-v1": '#d55e00', 
     "meta-task-high-13-sfl-linear-0.0": "#cc78bc",
-    "meta-task-high-13-sfl-linear-1.0": "#ece133",
+    "meta-task-high-13-sfl-linear-1.0": "#de8f05",
     "high-13-sfl-uniform-v1": "#029e73",
     "PLR-PVL": '#029e73', 
     "ACCEL-MaxMC": '#cc78bc', 

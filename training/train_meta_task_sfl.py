@@ -217,7 +217,7 @@ def make_train(
                 "buffer_learnability_scores": learnability.at[top_learnability].get(),
                 "buffer_success": sucess_rate.at[top_learnability].get(),
                 "all_sampled_success": sucess_rate,
-                "mean_num_rules": jnp.mean(jnp.sum(jnp.where(top_rulesets.rules.at[:,0].get() > 0, 1, 0), axis=1))
+                "ruleset_mean_num_rules": jnp.mean(jnp.sum(jnp.where(top_rulesets.rules.at[:,0].get() > 0, 1, 0), axis=1))
             }
             
             return top_rulesets, info
